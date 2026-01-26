@@ -6,87 +6,120 @@
     disko.url = "github:nix-community/disko";
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      disko,
-    }:
-    let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-      nixosTest = import (nixpkgs + "/nixos/lib/testing-python.nix") {
-        inherit system pkgs;
+  outputs = {
+    self,
+    nixpkgs,
+    disko,
+  }: let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+    nixosTest = import (nixpkgs + "/nixos/lib/testing-python.nix") {
+      inherit system pkgs;
+    };
+
+    baseModules = [
+      disko.nixosModules.disko
+      ./disko.nix
+      ./configuration.nix
+    ];
+
+    mkService = serviceName: module:
+      nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = baseModules ++ [module];
+        specialArgs = {
+          inherit serviceName;
+        };
       };
 
-      baseModules = [
-        disko.nixosModules.disko
-        ./disko.nix
-        ./configuration.nix
+    optionsPath =
+      if builtins.pathExists ./options.nix
+      then ./options.nix
+      else ./examples/options.example.nix;
+
+    healthScript = pkgs.writeShellApplication {
+      name = "health-check";
+      runtimeInputs = [
+        self
+        pkgs.openssh
+        pkgs.iproute2
+        pkgs.gnugrep
+        pkgs.systemd
+        pkgs.nix
+        pkgs.jq
       ];
+      text = builtins.readFile ./checks/health-check.sh;
+    };
+    healthApp = pkgs.writeShellApplication {
+      name = "health";
+      runtimeInputs = [healthScript];
+      text = ''
+        exec ${healthScript}/bin/health-check ${optionsPath} ${./tests}
+      '';
+    };
 
-      mkService =
-        serviceName: module:
-        nixpkgs.lib.nixosSystem {
-          system = system;
-          modules = baseModules ++ [ module ];
-          specialArgs = {
-            inherit serviceName;
-          };
-        };
-
-      healthScript = pkgs.writeShellApplication {
-        name = "health-check";
-        runtimeInputs = [
-          self
-          pkgs.openssh
-          pkgs.iproute2
-          pkgs.gnugrep
-          pkgs.systemd
-          pkgs.nix
-          pkgs.jq
-        ];
-        text = builtins.readFile ./checks/health-check.sh;
+    lintApp = pkgs.writeShellApplication {
+      name = "lint";
+      runtimeInputs = [
+        pkgs.alejandra
+        pkgs.statix
+        pkgs.deadnix
+        pkgs.shellcheck
+      ];
+      text = ''
+        set -euo pipefail
+        alejandra --check .
+        statix check .
+        deadnix . --exclude server-configs/server-module.example.nix
+        shellcheck scripts/*.sh checks/*.sh
+      '';
+    };
+  in {
+    checks.${system} = {
+      enshrouded-vm = import ./tests/vm/enshrouded.nix {
+        inherit pkgs nixosTest;
+        inherit (nixpkgs) lib;
       };
-      healthApp = pkgs.writeShellApplication {
-        name = "health";
-        runtimeInputs = [ healthScript ];
-        text = ''
-          exec ${healthScript}/bin/health-check ${./options.nix} ${./tests}
-        '';
+      palworld-vm = import ./tests/vm/palworld.nix {
+        inherit pkgs nixosTest;
+        inherit (nixpkgs) lib;
       };
-    in
-    {
-      checks.${system} = {
-        enshrouded-vm = import ./tests/vm/enshrouded.nix {
-          inherit pkgs nixosTest;
-          lib = nixpkgs.lib;
-        };
-        palworld-vm = import ./tests/vm/palworld.nix {
-          inherit pkgs nixosTest;
-          lib = nixpkgs.lib;
-        };
-        vrising-vm = import ./tests/vm/vrising.nix {
-          inherit pkgs nixosTest;
-          lib = nixpkgs.lib;
-        };
-      };
-
-      apps.${system} = {
-        install = import ./installer.nix { pkgs = pkgs; };
-        health = {
-          type = "app";
-          program = "${healthApp}/bin/health";
-          meta = {
-            description = "Run live health checks over SSH.";
-          };
-        };
-      };
-
-      nixosConfigurations = {
-        enshrouded = mkService "enshrouded" ./services/enshrouded-server.nix;
-        palworld = mkService "palworld" ./services/palworld-server.nix;
-        vrising = mkService "vrising" ./services/vrising-server.nix;
+      vrising-vm = import ./tests/vm/vrising.nix {
+        inherit pkgs nixosTest;
+        inherit (nixpkgs) lib;
       };
     };
+
+    apps.${system} = {
+      install = import ./installer.nix {inherit pkgs;};
+      lint = {
+        type = "app";
+        program = "${lintApp}/bin/lint";
+      };
+      health = {
+        type = "app";
+        program = "${healthApp}/bin/health";
+        meta = {
+          description = "Run live health checks over SSH.";
+        };
+      };
+    };
+
+    devShells.${system} = {
+      default = pkgs.mkShell {
+        packages = [
+          pkgs.alejandra
+          pkgs.statix
+          pkgs.deadnix
+          pkgs.shellcheck
+        ];
+      };
+    };
+
+    nixosConfigurations = {
+      enshrouded = mkService "enshrouded" ./services/enshrouded-server.nix;
+      palworld = mkService "palworld" ./services/palworld-server.nix;
+      vrising = mkService "vrising" ./services/vrising-server.nix;
+    };
+  };
 }

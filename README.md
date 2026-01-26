@@ -61,6 +61,23 @@ Service modules live in `services/`. Add a new module and a matching entry in `n
 - Live health check: `nix run .#health`.
 - Health check ports support `udp`, `tcp`, plus `udpOptional` and `tcpOptional` for non-fatal listeners.
 
+## CI
+
+- Local lint/format tools: `nix develop` (includes `alejandra`, `statix`, `deadnix`, `shellcheck`).
+- Run local lint in one command: `nix run .#lint`.
+- Run the same checks as CI:
+  - `nix flake check -L`
+  - `nix develop -c alejandra --check .`
+  - `nix develop -c statix check .`
+  - `nix develop -c deadnix .`
+  - `nix develop -c shellcheck scripts/*.sh checks/*.sh`
+- GitHub Actions workflows:
+  - `Lint`: formatting + lints + shellcheck.
+  - `CI`: full `nix flake check -L` (includes VM tests) plus lints.
+- Run GitHub Actions locally with Act:
+  - Lint only: `act -j lint -P ubuntu-latest=catthehacker/ubuntu:act-latest`
+  - Full checks (requires KVM): `act -j checks --container-options "--device /dev/kvm" -P ubuntu-latest=catthehacker/ubuntu:act-latest`
+
 ## Troubleshooting
 
 - SSH host keys change after reinstall:
