@@ -36,19 +36,20 @@
   '';
 
   configWriter = pkgs.writeShellScript "enshrouded-config" ''
-            set -euo pipefail
-            mkdir -p "${serverDir}"
-        if [ -n "${serverConfigFilePath}" ] && [ -f "${serverConfigFilePath}" ]; then
-          install -m 0640 "${serverConfigFilePath}" "${serverConfigPath}"
-        else
-          if [ -n "${serverConfigFilePath}" ]; then
-            echo "Config file not found at ${serverConfigFilePath}, using defaults." >&2
-          fi
-          cat > "${serverConfigPath}" <<'EOF'
+    set -euo pipefail
+    mkdir -p "${serverDir}"
+    if [ -n "${serverConfigFilePath}" ] && [ -f "${serverConfigFilePath}" ]; then
+      install -m 0640 "${serverConfigFilePath}" "${serverConfigPath}"
+      exit 0
+    fi
+
+    if [ -n "${serverConfigFilePath}" ]; then
+      echo "Config file not found at ${serverConfigFilePath}, using defaults." >&2
+    fi
+
+    cat > "${serverConfigPath}" <<'EOF'
     ${serverConfigJson}
     EOF
-        fi
-
   '';
 
   startScript = pkgs.writeShellScript "enshrouded-start" ''

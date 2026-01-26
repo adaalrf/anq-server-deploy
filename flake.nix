@@ -95,6 +95,9 @@
       lint = {
         type = "app";
         program = "${lintApp}/bin/lint";
+        meta = {
+          description = "Run local formatter and linters.";
+        };
       };
       health = {
         type = "app";
