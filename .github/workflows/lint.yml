@@ -1,0 +1,35 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Alejandra
+        run: nix develop -c alejandra --check .
+
+      - name: Statix
+        run: nix develop -c statix check .
+
+      - name: Deadnix
+        run: nix develop -c deadnix .
+
+      - name: Shellcheck
+        run: nix develop -c shellcheck scripts/*.sh checks/*.sh
