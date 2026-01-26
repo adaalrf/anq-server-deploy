@@ -1,5 +1,4 @@
-{ pkgs }:
-let
+{pkgs}: let
   script = pkgs.writeShellApplication {
     name = "install";
     runtimeInputs = [
@@ -12,8 +11,7 @@ let
     ];
     text = builtins.readFile ./scripts/installer.sh;
   };
-in
-{
+in {
   type = "app";
   program = "${script}/bin/install";
   meta = {

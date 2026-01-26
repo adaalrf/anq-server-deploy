@@ -3,20 +3,21 @@
   pkgs,
   lib,
   ...
-}:
-let
+}: let
   cfg = config.services.enshrouded;
   installDir = "/srv/enshrouded";
   serverDir = "${installDir}/server";
   steamAppId = "2278520";
   serverBinary = "${serverDir}/enshrouded_server.exe";
   serverConfigPath = "${serverDir}/enshrouded_server.json";
-  serverConfigFilePath = if cfg.serverConfigFile == null then "" else cfg.serverConfigFile;
+  serverConfigFilePath =
+    if cfg.serverConfigFile == null
+    then ""
+    else cfg.serverConfigFile;
   serverConfigJson = builtins.toJSON {
     name = cfg.serverName;
     password = cfg.serverPassword;
-    maxPlayers = cfg.maxPlayers;
-    gameSettings = cfg.gameSettings;
+    inherit (cfg) maxPlayers gameSettings;
   };
 
   updateScript = pkgs.writeShellScript "enshrouded-update" ''
@@ -64,9 +65,9 @@ let
 
   unit = {
     description = "Enshrouded dedicated server";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
+    after = ["network-online.target"];
+    wants = ["network-online.target"];
+    wantedBy = ["multi-user.target"];
     serviceConfig = {
       Type = "simple";
       User = "enshrouded";
@@ -83,7 +84,7 @@ let
       UMask = "0027";
       CPUQuota = cpuQuota;
       MemoryMax = cfg.memoryMax;
-      Environment = [ "HOME=${installDir}" ] ++ lib.optionals (!cfg.wineDebug) [ "WINEDEBUG=-all" ];
+      Environment = ["HOME=${installDir}"] ++ lib.optionals (!cfg.wineDebug) ["WINEDEBUG=-all"];
     };
   };
 
@@ -116,7 +117,7 @@ let
 
     gameSettings = lib.mkOption {
       type = lib.types.attrs;
-      default = { };
+      default = {};
       description = "Game settings JSON payload.";
     };
 
@@ -144,9 +145,7 @@ let
       description = "Enable Wine debug logging (set false to silence Wine).";
     };
   };
-
-in
-{
+in {
   options.services.enshrouded = configOptions;
 
   config = lib.mkIf cfg.enable {
@@ -157,17 +156,19 @@ in
       createHome = true;
     };
 
-    users.groups.enshrouded = { };
+    users.groups.enshrouded = {};
 
-    environment.systemPackages = [ pkgs.steamcmd ];
+    environment.systemPackages = [pkgs.steamcmd];
 
-    systemd.services.enshrouded = unit // {
-      path = [
-        pkgs.steamcmd
-        pkgs.wine64
-        pkgs.wine64Packages.staging
-        pkgs.winePackages.staging
-      ];
-    };
+    systemd.services.enshrouded =
+      unit
+      // {
+        path = [
+          pkgs.steamcmd
+          pkgs.wine64
+          pkgs.wine64Packages.staging
+          pkgs.winePackages.staging
+        ];
+      };
   };
 }

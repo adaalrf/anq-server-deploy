@@ -5,26 +5,24 @@
 }:
 nixosTest.makeTest {
   name = "enshrouded-vm";
-  nodes.machine =
-    { ... }:
-    {
-      imports = [ ../../services/enshrouded-server.nix ];
+  nodes.machine = {...}: {
+    imports = [../../services/enshrouded-server.nix];
 
-      nixpkgs.config.allowUnfree = true;
+    nixpkgs.config.allowUnfree = true;
 
-      services.enshrouded = {
-        enable = true;
-        cpuCores = 2;
-        memoryMax = "8G";
-      };
-
-      systemd.services.enshrouded.serviceConfig = {
-        ExecStartPre = lib.mkForce [ ];
-        ExecStart = lib.mkForce "${pkgs.coreutils}/bin/true";
-        Type = lib.mkForce "oneshot";
-        RemainAfterExit = lib.mkForce true;
-      };
+    services.enshrouded = {
+      enable = true;
+      cpuCores = 2;
+      memoryMax = "8G";
     };
+
+    systemd.services.enshrouded.serviceConfig = {
+      ExecStartPre = lib.mkForce [];
+      ExecStart = lib.mkForce "${pkgs.coreutils}/bin/true";
+      Type = lib.mkForce "oneshot";
+      RemainAfterExit = lib.mkForce true;
+    };
+  };
 
   testScript = ''
     machine.wait_for_unit("enshrouded.service")

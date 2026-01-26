@@ -3,29 +3,26 @@
   lib,
   nixosTest,
 }:
-
 nixosTest.makeTest {
   name = "vrising-vm";
-  nodes.machine =
-    { ... }:
-    {
-      imports = [ ../../services/vrising-server.nix ];
+  nodes.machine = {...}: {
+    imports = [../../services/vrising-server.nix];
 
-      nixpkgs.config.allowUnfree = true;
+    nixpkgs.config.allowUnfree = true;
 
-      services.vrising = {
-        enable = true;
-        cpuCores = 2;
-        memoryMax = "8G";
-      };
-
-      systemd.services.vrising.serviceConfig = {
-        ExecStartPre = lib.mkForce [ ];
-        ExecStart = lib.mkForce "${pkgs.coreutils}/bin/true";
-        Type = lib.mkForce "oneshot";
-        RemainAfterExit = lib.mkForce true;
-      };
+    services.vrising = {
+      enable = true;
+      cpuCores = 2;
+      memoryMax = "8G";
     };
+
+    systemd.services.vrising.serviceConfig = {
+      ExecStartPre = lib.mkForce [];
+      ExecStart = lib.mkForce "${pkgs.coreutils}/bin/true";
+      Type = lib.mkForce "oneshot";
+      RemainAfterExit = lib.mkForce true;
+    };
+  };
 
   testScript = ''
     machine.wait_for_unit("vrising.service")

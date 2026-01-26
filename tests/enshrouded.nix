@@ -6,9 +6,9 @@
       15637
       15638
     ];
-    udpOptional = [ ];
-    tcp = [ ];
-    tcpOptional = [ ];
+    udpOptional = [];
+    tcp = [];
+    tcpOptional = [];
   };
 
   logPattern = "Started Enshrouded dedicated server";

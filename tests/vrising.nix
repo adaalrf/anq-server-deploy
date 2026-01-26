@@ -5,9 +5,9 @@
       9876
       9877
     ];
-    udpOptional = [ ];
-    tcp = [ ];
-    tcpOptional = [ ];
+    udpOptional = [];
+    tcp = [];
+    tcpOptional = [];
   };
   logPattern = "Started V Rising dedicated server";
 }

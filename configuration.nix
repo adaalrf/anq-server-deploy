@@ -2,48 +2,68 @@
   lib,
   serviceName ? null,
   ...
-}:
-let
-  opts = import ./options.nix;
-  selectedService = if serviceName == null then opts.service else serviceName;
+}: let
+  optionsPath =
+    if builtins.pathExists ./options.nix
+    then ./options.nix
+    else ./examples/options.example.nix;
+  keysPath =
+    if builtins.pathExists ./keys.nix
+    then ./keys.nix
+    else ./examples/keys.example.nix;
+  opts = import optionsPath;
+  selectedService =
+    if serviceName == null
+    then opts.service
+    else serviceName;
   serviceCfg = opts.services.${selectedService} or (throw "Unknown service '${selectedService}' in options.nix");
-  deployUser = opts.deploy.user or "";
-  _ = lib.assertMsg (deployUser != "") "deploy.user must be set in options.nix" null;
-in
-{
-  networking.hostName = "anq-server-deploy";
-  networking.useDHCP = true;
+  deployUser =
+    lib.assertMsg ((opts.deploy.user or "") != "") "deploy.user must be set in options.nix" opts.deploy.user;
+in {
+  networking = {
+    hostName = "anq-server-deploy";
+    useDHCP = true;
+    firewall = {
+      enable = true;
+      allowedUDPPorts = serviceCfg.udpPorts or [];
+      allowedTCPPorts = serviceCfg.tcpPorts or [];
+    };
+  };
 
-  # Bootloader (UEFI + systemd-boot)
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  boot = {
+    # Bootloader (UEFI + systemd-boot)
+    loader.systemd-boot.enable = true;
+    loader.efi.canTouchEfiVariables = true;
 
-  # Initrd: keep this minimal but robust for Hetzner/QEMU-style disks.
-  # This solved early root discovery issues.
-  boot.initrd.systemd.enable = true;
-  boot.initrd.supportedFilesystems = [
-    "ext4"
-    "vfat"
-  ];
-  boot.initrd.availableKernelModules = [
-    # Virtio stack (common on cloud/VM)
-    "virtio_pci"
-    "virtio_blk"
-    "virtio_scsi"
+    # Initrd: keep this minimal but robust for Hetzner/QEMU-style disks.
+    # This solved early root discovery issues.
+    initrd = {
+      systemd.enable = true;
+      supportedFilesystems = [
+        "ext4"
+        "vfat"
+      ];
+      availableKernelModules = [
+        # Virtio stack (common on cloud/VM)
+        "virtio_pci"
+        "virtio_blk"
+        "virtio_scsi"
 
-    # Block device stack
-    "sd_mod"
+        # Block device stack
+        "sd_mod"
 
-    # Controller fallbacks (safe to keep; small cost)
-    "ahci"
-    "ata_piix"
+        # Controller fallbacks (safe to keep; small cost)
+        "ahci"
+        "ata_piix"
 
-    # If the platform exposes disk as NVMe (harmless if not used)
-    "nvme"
-  ];
+        # If the platform exposes disk as NVMe (harmless if not used)
+        "nvme"
+      ];
+    };
 
-  # Hetzner/QEMU: mitigate device enumeration timing in initrd.
-  boot.kernelParams = [ "rootdelay=10" ];
+    # Hetzner/QEMU: mitigate device enumeration timing in initrd.
+    kernelParams = ["rootdelay=10"];
+  };
 
   time.timeZone = "UTC";
 
@@ -55,25 +75,27 @@ in
 
   programs.nix-ld.enable = true;
 
-  # Declarative users (reproducible). No local passwords, SSH keys only.
-  users.mutableUsers = false;
+  users = {
+    # Declarative users (reproducible). No local passwords, SSH keys only.
+    mutableUsers = false;
 
-  users.users.${deployUser} = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" ];
+    users.${deployUser} = {
+      isNormalUser = true;
+      extraGroups = ["wheel"];
 
-    # Lock local password login (SSH key login still works).
-    # This enforces "SSH-only" in practice.
-    hashedPassword = "!";
+      # Lock local password login (SSH key login still works).
+      # This enforces "SSH-only" in practice.
+      hashedPassword = "!";
 
-    openssh.authorizedKeys.keys = import ./keys.nix;
-  };
+      openssh.authorizedKeys.keys = import keysPath;
+    };
 
-  users.users.root = {
-    # Lock root password as well.
-    hashedPassword = "!";
-    # Do NOT allow root SSH keys.
-    openssh.authorizedKeys.keys = [ ];
+    users.root = {
+      # Lock root password as well.
+      hashedPassword = "!";
+      # Do NOT allow root SSH keys.
+      openssh.authorizedKeys.keys = [];
+    };
   };
 
   # Passwordless sudo for wheel (SSH-key access + sudo escalation, no password).
@@ -90,24 +112,19 @@ in
       PermitRootLogin = "no";
 
       # Only allow adaal over SSH
-      AllowUsers = [ deployUser ];
+      AllowUsers = [deployUser];
     };
   };
 
-  networking.firewall = {
-    enable = true;
-    allowedUDPPorts = serviceCfg.udpPorts or [ ];
-    allowedTCPPorts = serviceCfg.tcpPorts or [ ];
-  };
-
   services = {
-    ${serviceCfg.serviceName} = {
-      enable = true;
-      serverConfigFile = serviceCfg.configFile or null;
-    }
-    // (lib.optionalAttrs (serviceCfg.useWineDebug or false) {
-      wineDebug = opts.serviceDefaults.wineDebug;
-    });
+    ${serviceCfg.serviceName} =
+      {
+        enable = true;
+        serverConfigFile = serviceCfg.configFile or null;
+      }
+      // (lib.optionalAttrs (serviceCfg.useWineDebug or false) {
+        inherit (opts.serviceDefaults) wineDebug;
+      });
   };
 
   system.stateVersion = "25.11";

@@ -6,19 +6,17 @@
     disko.url = "github:nix-community/disko";
   };
 
-  outputs =
-    {
-      nixpkgs,
-      disko,
-    }:
-    {
-      nixosConfigurations.example = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          disko.nixosModules.disko
-          ./disko.nix
-          ./configuration.nix
-        ];
-      };
+  outputs = {
+    nixpkgs,
+    disko,
+  }: {
+    nixosConfigurations.example = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        disko.nixosModules.disko
+        ./disko.nix
+        ./configuration.nix
+      ];
     };
+  };
 }

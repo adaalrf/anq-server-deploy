@@ -63,10 +63,9 @@ rec {
         15638
       ];
       configFile =
-        if builtins.pathExists ./server-configs/enshrouded_server.json then
-          ./server-configs/enshrouded_server.json
-        else
-          null;
+        if builtins.pathExists ./server-configs/enshrouded_server.json
+        then ./server-configs/enshrouded_server.json
+        else null;
       useWineDebug = true;
     };
     palworld = {
@@ -76,13 +75,12 @@ rec {
         "/srv/palworld/server/Pal/Saved/Config/LinuxServer"
         "/srv/palworld/server/Pal/Saved/Logs"
       ];
-      tcpPorts = [ ];
-      udpPorts = [ 8211 ];
+      tcpPorts = [];
+      udpPorts = [8211];
       configFile =
-        if builtins.pathExists ./server-configs/palworld_server_settings.ini then
-          ./server-configs/palworld_server_settings.ini
-        else
-          null;
+        if builtins.pathExists ./server-configs/palworld_server_settings.ini
+        then ./server-configs/palworld_server_settings.ini
+        else null;
       useWineDebug = false;
     };
     vrising = {
@@ -91,18 +89,16 @@ rec {
         "/srv/vrising/server/save-data"
         "/srv/vrising/server/logs"
       ];
-      tcpPorts = [ ];
+      tcpPorts = [];
       udpPorts = [
         9876
         9877
       ];
       configFile =
-        if builtins.pathExists ./server-configs/vrising_server_settings.json then
-          ./server-configs/vrising_server_settings.json
-        else
-          null;
+        if builtins.pathExists ./server-configs/vrising_server_settings.json
+        then ./server-configs/vrising_server_settings.json
+        else null;
       useWineDebug = true;
     };
   };
-
 }

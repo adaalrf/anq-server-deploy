@@ -3,14 +3,16 @@
   pkgs,
   lib,
   ...
-}:
-let
+}: let
   cfg = config.services.examplegame;
   installDir = "/srv/examplegame";
   serverDir = "${installDir}/server";
   serverBinary = "${serverDir}/example-server";
   serverConfigPath = "${serverDir}/config.json";
-  serverConfigFilePath = if cfg.serverConfigFile == null then "" else cfg.serverConfigFile;
+  serverConfigFilePath =
+    if cfg.serverConfigFile == null
+    then ""
+    else cfg.serverConfigFile;
 
   startScript = pkgs.writeShellScript "examplegame-start" ''
     set -euo pipefail
@@ -24,9 +26,9 @@ let
 
   unit = {
     description = "Example dedicated server";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
+    after = ["network-online.target"];
+    wants = ["network-online.target"];
+    wantedBy = ["multi-user.target"];
     serviceConfig = {
       Type = "simple";
       User = "examplegame";
@@ -37,7 +39,7 @@ let
       RestartSec = 10;
       LimitNOFILE = 1048576;
       UMask = "0027";
-      Environment = [ "HOME=${installDir}" ];
+      Environment = ["HOME=${installDir}"];
     };
   };
 
@@ -56,8 +58,7 @@ let
       description = "Additional arguments passed to the server binary.";
     };
   };
-in
-{
+in {
   options.services.examplegame = configOptions;
 
   config = lib.mkIf cfg.enable {
@@ -68,7 +69,7 @@ in
       createHome = true;
     };
 
-    users.groups.examplegame = { };
+    users.groups.examplegame = {};
 
     systemd.services.examplegame = unit;
   };

@@ -3,8 +3,7 @@
   pkgs,
   lib,
   ...
-}:
-let
+}: let
   cfg = config.services.vrising;
   installDir = "/srv/vrising";
   serverDir = "${installDir}/server";
@@ -13,8 +12,11 @@ let
   dataDir = "${serverDir}/save-data";
   logsDir = "${serverDir}/logs";
   serverConfigPath = "${serverDir}/save-data/Settings/ServerHostSettings.json";
-  serverConfigFilePath = if cfg.serverConfigFile == null then "" else cfg.serverConfigFile;
-  runtimeSteamAppId = cfg.runtimeSteamAppId;
+  serverConfigFilePath =
+    if cfg.serverConfigFile == null
+    then ""
+    else cfg.serverConfigFile;
+  inherit (cfg) runtimeSteamAppId;
 
   updateScript = pkgs.writeShellScript "vrising-update" ''
     set -euo pipefail
@@ -102,9 +104,9 @@ let
 
   unit = {
     description = "V Rising dedicated server";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
+    after = ["network-online.target"];
+    wants = ["network-online.target"];
+    wantedBy = ["multi-user.target"];
     serviceConfig = {
       Type = "simple";
       User = "vrising";
@@ -121,13 +123,14 @@ let
       UMask = "0027";
       CPUQuota = cpuQuota;
       MemoryMax = cfg.memoryMax;
-      Environment = [
-        "HOME=${installDir}"
-        "SteamAppId=${runtimeSteamAppId}"
-        "SteamGameId=${runtimeSteamAppId}"
-        "WINEDLLOVERRIDES=steam_api64,steamclient64,steamclient=n,b"
-      ]
-      ++ lib.optionals (!cfg.wineDebug) [ "WINEDEBUG=-all" ];
+      Environment =
+        [
+          "HOME=${installDir}"
+          "SteamAppId=${runtimeSteamAppId}"
+          "SteamGameId=${runtimeSteamAppId}"
+          "WINEDLLOVERRIDES=steam_api64,steamclient64,steamclient=n,b"
+        ]
+        ++ lib.optionals (!cfg.wineDebug) ["WINEDEBUG=-all"];
     };
   };
 
@@ -170,8 +173,7 @@ let
       description = "Enable Wine debug logging (set false to silence Wine).";
     };
   };
-in
-{
+in {
   options.services.vrising = configOptions;
 
   config = lib.mkIf cfg.enable {
@@ -182,24 +184,26 @@ in
       createHome = true;
     };
 
-    users.groups.vrising = { };
+    users.groups.vrising = {};
 
     systemd.tmpfiles.rules = [
       "d ${installDir} 0750 vrising vrising -"
       "d ${serverDir} 0750 vrising vrising -"
     ];
 
-    environment.systemPackages = [ pkgs.steamcmd ];
+    environment.systemPackages = [pkgs.steamcmd];
 
-    systemd.services.vrising = unit // {
-      path = [
-        pkgs.steamcmd
-        pkgs.wine64
-        pkgs.wine64Packages.staging
-        pkgs.winePackages.staging
-        pkgs.xorg.xvfb
-        pkgs.samba
-      ];
-    };
+    systemd.services.vrising =
+      unit
+      // {
+        path = [
+          pkgs.steamcmd
+          pkgs.wine64
+          pkgs.wine64Packages.staging
+          pkgs.winePackages.staging
+          pkgs.xorg.xvfb
+          pkgs.samba
+        ];
+      };
   };
 }
