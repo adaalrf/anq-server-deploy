@@ -17,8 +17,12 @@
     then opts.service
     else serviceName;
   serviceCfg = opts.services.${selectedService} or (throw "Unknown service '${selectedService}' in options.nix");
-  deployUser =
-    lib.assertMsg ((opts.deploy.user or "") != "") "deploy.user must be set in options.nix" opts.deploy.user;
+  deployUser = let
+    user = opts.deploy.user or "";
+  in
+    if user != ""
+    then user
+    else throw "deploy.user must be set in options.nix";
 in {
   networking = {
     hostName = "anq-server-deploy";
