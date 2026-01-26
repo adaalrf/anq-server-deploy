@@ -9,6 +9,7 @@ NixOS flake for deploying and managing dedicated servers with a Nix-native insta
 ## Quick start
 
 ```bash
+# Follow "Get started" first, then:
 nix run .#install
 nix run .#health
 ```
@@ -54,6 +55,7 @@ Service modules live in `services/`. Add a new module and a matching entry in `n
 - Per-service settings live under `services.<name>` (ports, config file, backup paths).
 - `serviceDefaults` contains shared service toggles like `wineDebug`.
 - `server-configs/` stores local config files; only examples are tracked.
+- `options.nix` and `keys.nix` are local-only and ignored by git.
 
 ## Tests
 
@@ -83,6 +85,7 @@ Service modules live in `services/`. Add a new module and a matching entry in `n
 - SSH host keys change after reinstall:
   - `ssh-keygen -R <host-or-ip>`
   - Set `ssh.acceptNewHostKeys = true` in `options.nix` to auto-accept (less secure).
+- Local configs (`options.nix`, `keys.nix`, and `server-configs/`) are intentionally ignored by git.
 - `steamcmd` is unfree; `configuration.nix` enables unfree packages for the host build.
 
 ## Examples
