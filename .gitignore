@@ -1,0 +1,15 @@
+keys.nix
+options.nix
+AGENTS.md
+.env
+*.key
+*.pem
+*.pfx
+*.age
+result
+backups/
+.zed/
+.direnv/
+server-configs/*
+!server-configs/*.example.*
+!server-configs/game-server.example.nix
