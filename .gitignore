@@ -1,5 +1,5 @@
-keys.nix
-options.nix
+keys.local.nix
+options.local.nix
 AGENTS.md
 .env
 *.key

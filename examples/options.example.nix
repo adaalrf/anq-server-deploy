@@ -37,6 +37,7 @@ rec {
     enable = false;
     localDir = "./backups/${service}";
     archiveKeep = 10;
+    allowInsideRepoWithoutGit = false;
   };
 
   serviceDefaults = {

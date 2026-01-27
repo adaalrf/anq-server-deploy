@@ -29,6 +29,7 @@ CONFIRM_INSTALL="$(normalize_bool "$(read_opt installer.confirmInstall)")"
 BACKUP_ENABLE="$(normalize_bool "$(read_opt backup.enable)")"
 BACKUP_DIR="$(read_opt backup.localDir)"
 ARCHIVE_KEEP="$(read_opt backup.archiveKeep)"
+BACKUP_ALLOW_INSIDE_NO_GIT="$(normalize_bool "$(read_opt backup.allowInsideRepoWithoutGit)")"
 BACKUP_PATHS="$(nix eval --impure --raw --expr "builtins.concatStringsSep \" \" ((import ./options.nix).services.${SERVICE}.backupPaths or [])" 2>/dev/null || true)"
 
 if [[ -z "$HOST" ]]; then
@@ -124,9 +125,13 @@ if [[ "$BACKUP_ENABLE" == "1" ]]; then
   REPO_ROOT_REAL="$(realpath -m "$(pwd)")"
   BACKUP_DIR_REAL="$(realpath -m "$BACKUP_DIR")"
   if [[ "$BACKUP_DIR_REAL" == "$REPO_ROOT_REAL"* && ! -d "${REPO_ROOT_REAL}/.git" ]]; then
-    echo "backup.localDir is inside the repo but .git is missing." >&2
-    echo "Move backups outside the repo or initialize git to keep backups inside." >&2
-    exit 1
+    if [[ "$BACKUP_ALLOW_INSIDE_NO_GIT" == "1" ]]; then
+      log "Warning: backup.localDir lives inside the repo but .git is missing. Backups will continue because backup.allowInsideRepoWithoutGit is true."
+    else
+      echo "backup.localDir is inside the repo but .git is missing." >&2
+      echo "Move backups outside the repo or initialize git to keep backups inside." >&2
+      exit 1
+    fi
   fi
   if [[ -z "$BACKUP_PATHS" ]]; then
     BACKUP_PATHS="/srv/$SERVICE"

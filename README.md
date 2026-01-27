@@ -16,9 +16,10 @@ This project is for people who want the whole host treated as code: OS state, us
 
 Prerequisites: Nix with flakes enabled on your local machine (NixOS not required).
 
-1) Copy `examples/options.example.nix` to `options.nix`.
-2) Copy `examples/keys.example.nix` to `keys.nix`.
-3) Edit `options.nix` (deploy, ssh, service, ports, backups).
+1) Copy `examples/options.example.nix` to `options.local.nix`.
+2) Copy `examples/keys.example.nix` to `keys.local.nix`.
+   The tracked `options.nix`/`keys.nix` wrappers automatically import those `.local` files (or fall back to the examples when the overrides are missing).
+3) Edit `options.local.nix` (deploy, ssh, service, ports, backups).
 4) If `deploy.mode = "install"`, set `installer.confirmInstall = true`.
 5) Run `nix run .#install` (uses [`nixos-anywhere`](https://github.com/nix-community/nixos-anywhere)).
 
@@ -48,8 +49,10 @@ nix run .#health -> tests/<name>.nix (ports + optional log checks)
 
 ## Repository layout
 
-- `options.nix` — local single source of truth (ignored by git).
-- `keys.nix` — local SSH keys (ignored by git).
+- `options.nix` — tracked entrypoint that imports `options.local.nix` (or the example when the override is missing).
+- `options.local.nix` — ignored user config (copy from `examples/options.example.nix`).
+- `keys.nix` — tracked entrypoint that imports `keys.local.nix` (or the example when the override is missing).
+- `keys.local.nix` — ignored SSH key list (copy from `examples/keys.example.nix`).
 - `configuration.nix` — shared NixOS host base.
 - `installer.nix` / `disko.nix` — remote installer + disk layout.
 - `services/<service>.nix` — service modules.
@@ -69,8 +72,9 @@ Current modules: `enshrouded`, `palworld`, `vrising`. Service modules live in `s
 - `services.<name>`: per-service settings (ports, config paths, backup paths).
 - `serviceDefaults`: shared toggles like `wineDebug`.
 - `backup`: toggle + local destination + retention.
+- `backup.allowInsideRepoWithoutGit`: whether to permit in-repo backups when `.git` is missing (defaults to `false`).
 
-Local config files go under `server-configs/`. Only examples are tracked, and `options.nix`/`keys.nix` are intentionally ignored by git.
+Local config files go under `server-configs/`. Only examples are tracked, and the overrides (`options.local.nix`, `keys.local.nix`) stay ignored while the lightweight wrappers (`options.nix`, `keys.nix`) remain in the repo.
 
 ## Adding a new service
 
@@ -114,7 +118,8 @@ act -j checks --container-options "--device /dev/kvm" -P ubuntu-latest=catthehac
 - SSH host keys change after reinstall:
   - `ssh-keygen -R <host-or-ip>`
   - Set `ssh.acceptNewHostKeys = true` in `options.nix` to auto-accept (less secure).
-- Local configs (`options.nix`, `keys.nix`, and `server-configs/`) are intentionally ignored by git.
+- Local configs (`options.local.nix`, `keys.local.nix`, and `server-configs/`) are intentionally ignored by git while `options.nix`/`keys.nix` remain tracked wrappers.
+- If `backup.localDir` lives inside the repo but `.git` is missing, set `backup.allowInsideRepoWithoutGit = true` to allow backups inside the repo; otherwise keep `.git` to satisfy the guard.
 - `steamcmd` is unfree; `configuration.nix` enables unfree packages for the host build.
 
 ## Examples
