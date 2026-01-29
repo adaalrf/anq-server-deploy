@@ -14,17 +14,17 @@ if [[ ! -d "$TESTS_DIR" ]]; then
   exit 1
 fi
 
-OPTS_JSON="$(nix eval --impure --json --expr "let opts = import ${OPTIONS_PATH}; in { host = opts.deploy.host; user = opts.deploy.user; service = opts.service; acceptNewHostKeys = opts.ssh.acceptNewHostKeys; }" 2>/dev/null || true)"
+OPTS_NIX="$(nix eval --impure --json --expr "let opts = import ${OPTIONS_PATH}; in { host = opts.deploy.host; user = opts.deploy.hostUser; service = opts.service; acceptNewHostKeys = opts.ssh.acceptNewHostKeys; }" 2>/dev/null || true)"
 
-if [[ -z "$OPTS_JSON" ]]; then
+if [[ -z "$OPTS_NIX" ]]; then
   echo "Unable to read options from $OPTIONS_PATH" >&2
   exit 1
 fi
 
-HOST="$(jq -r '.host // empty' <<<"$OPTS_JSON")"
-USER="$(jq -r '.user // empty' <<<"$OPTS_JSON")"
-SERVICE_KEY="$(jq -r '.service // empty' <<<"$OPTS_JSON")"
-ACCEPT_NEW_HOST_KEYS="$(jq -r '.acceptNewHostKeys // false' <<<"$OPTS_JSON")"
+HOST="$(jq -r '.host // empty' <<<"$OPTS_NIX")"
+USER="$(jq -r '.user // empty' <<<"$OPTS_NIX")"
+SERVICE_KEY="$(jq -r '.service // empty' <<<"$OPTS_NIX")"
+ACCEPT_NEW_HOST_KEYS="$(jq -r '.acceptNewHostKeys // false' <<<"$OPTS_NIX")"
 
 if [[ -z "$SERVICE_KEY" ]]; then
   echo "Missing service in options.nix" >&2

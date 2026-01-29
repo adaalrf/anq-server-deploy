@@ -1,11 +1,12 @@
+```nix
 {
   config,
   pkgs,
   lib,
   ...
 }: let
-  cfg = config.services.examplegame;
-  installDir = "/srv/examplegame";
+  cfg = config.services.exampleservice;
+  installDir = "/srv/exampleservice";
   serverDir = "${installDir}/server";
   serverBinary = "${serverDir}/example-server";
   serverConfigPath = "${serverDir}/config.json";
@@ -14,7 +15,7 @@
     then ""
     else cfg.serverConfigFile;
 
-  startScript = pkgs.writeShellScript "examplegame-start" ''
+  startScript = pkgs.writeShellScript "exampleservice-start" ''
     set -euo pipefail
     if [ ! -x "${serverBinary}" ]; then
       echo "Example server binary not found at ${serverBinary}" >&2
@@ -31,8 +32,8 @@
     wantedBy = ["multi-user.target"];
     serviceConfig = {
       Type = "simple";
-      User = "examplegame";
-      Group = "examplegame";
+      User = "exampleservice";
+      Group = "exampleservice";
       WorkingDirectory = installDir;
       ExecStart = "${startScript}";
       Restart = "on-failure";
@@ -59,18 +60,19 @@
     };
   };
 in {
-  options.services.examplegame = configOptions;
+  options.services.exampleservice = configOptions;
 
   config = lib.mkIf cfg.enable {
-    users.users.examplegame = {
+    users.users.exampleservice = {
       isSystemUser = true;
-      group = "examplegame";
+      group = "exampleservice";
       home = installDir;
       createHome = true;
     };
 
-    users.groups.examplegame = {};
+    users.groups.exampleservice = {};
 
-    systemd.services.examplegame = unit;
+    systemd.services.exampleservice = unit;
   };
 }
+```

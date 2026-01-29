@@ -1,25 +1,33 @@
 rec {
   # Service output name (matches nixosConfigurations.<service> in flake.nix).
-  service = "enshrouded"; # or "palworld", "vrising"
+  service = "palworld";
 
   deploy = {
     # Hostname or IP of the target machine.
-    host = "anq-server-deploy";
+    host = "<your-host>";
 
     # SSH user used when host does not include user@.
-    user = "username";
+    hostUser = "<your-user>";
+
+    # Alternate user for destructive installs (defaults to `hostUser`).
+    installUser = "<your-install-user>";
 
     # Remote directory where the repo is synced.
-    remoteRepoDir = "/srv/enshrouded-repo";
+    remoteRepoDir = "/srv/${service}-repo";
+
+    # Require explicit confirmation for destructive installs.
+    confirmInstall = true;
 
     # Build on the target instead of locally.
-    buildOnRemote = false;
-
-    # install = destructive (nixos-anywhere), switch = non-destructive.
-    mode = "switch";
+    buildOnRemote = true;
 
     # Suppress installer logs.
     quiet = false;
+  };
+
+  installer = {
+    # Set to true when you are ready to run the destructive installer.
+    confirmInstall = false;
   };
 
   ssh = {
@@ -27,15 +35,10 @@ rec {
     acceptNewHostKeys = false;
   };
 
-  # Require explicit confirmation for destructive installs.
-  installer = {
-    confirmInstall = false;
-  };
-
   # Local backup settings for /srv data (optional).
   backup = {
-    enable = false;
-    localDir = "./backups/${service}";
+    enable = true;
+    localDir = "/home/adaal/palworld-backups";
     archiveKeep = 10;
     allowInsideRepoWithoutGit = false;
   };
@@ -64,9 +67,10 @@ rec {
         15638
       ];
       configFile =
-        if builtins.pathExists ./server-configs/enshrouded_server.json
-        then ./server-configs/enshrouded_server.json
-        else null;
+        if builtins.pathExists ./server-configs/enshrouded_server.json then
+          ./server-configs/enshrouded_server.json
+        else
+          null;
       useWineDebug = true;
     };
     palworld = {
@@ -76,12 +80,13 @@ rec {
         "/srv/palworld/server/Pal/Saved/Config/LinuxServer"
         "/srv/palworld/server/Pal/Saved/Logs"
       ];
-      tcpPorts = [];
-      udpPorts = [8211];
+      tcpPorts = [ ];
+      udpPorts = [ 8211 ];
       configFile =
-        if builtins.pathExists ./server-configs/palworld_server_settings.ini
-        then ./server-configs/palworld_server_settings.ini
-        else null;
+        if builtins.pathExists ./server-configs/palworld_server_settings.ini then
+          ./server-configs/palworld_server_settings.ini
+        else
+          null;
       useWineDebug = false;
     };
     vrising = {
@@ -90,15 +95,16 @@ rec {
         "/srv/vrising/server/save-data"
         "/srv/vrising/server/logs"
       ];
-      tcpPorts = [];
+      tcpPorts = [ ];
       udpPorts = [
         9876
         9877
       ];
       configFile =
-        if builtins.pathExists ./server-configs/vrising_server_settings.json
-        then ./server-configs/vrising_server_settings.json
-        else null;
+        if builtins.pathExists ./server-configs/vrising_server_settings.json then
+          ./server-configs/vrising_server_settings.json
+        else
+          null;
       useWineDebug = true;
     };
   };

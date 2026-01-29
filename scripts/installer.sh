@@ -18,18 +18,23 @@ normalize_bool() {
 }
 
 HOST="$(read_opt deploy.host)"
-USER="$(read_opt deploy.user)"
+HOST_USER="$(read_opt deploy.hostUser)"
+if [[ -z "$HOST_USER" ]]; then
+  HOST_USER="$(read_opt deploy.user)"
+fi
+INSTALL_USER="$(read_opt deploy.installUser)"
+if [[ -z "$INSTALL_USER" ]]; then
+  INSTALL_USER="$HOST_USER"
+fi
 SERVICE="$(read_opt service)"
 REMOTE_REPO_DIR="$(read_opt deploy.remoteRepoDir)"
 BUILD_ON_REMOTE="$(normalize_bool "$(read_opt deploy.buildOnRemote)")"
 QUIET="$(normalize_bool "$(read_opt deploy.quiet)")"
-MODE="$(read_opt deploy.mode)"
 ACCEPT_NEW_HOST_KEYS="$(normalize_bool "$(read_opt ssh.acceptNewHostKeys)")"
 CONFIRM_INSTALL="$(normalize_bool "$(read_opt installer.confirmInstall)")"
 BACKUP_ENABLE="$(normalize_bool "$(read_opt backup.enable)")"
 BACKUP_DIR="$(read_opt backup.localDir)"
 ARCHIVE_KEEP="$(read_opt backup.archiveKeep)"
-BACKUP_ALLOW_INSIDE_NO_GIT="$(normalize_bool "$(read_opt backup.allowInsideRepoWithoutGit)")"
 BACKUP_PATHS="$(nix eval --impure --raw --expr "builtins.concatStringsSep \" \" ((import ./options.nix).services.${SERVICE}.backupPaths or [])" 2>/dev/null || true)"
 
 if [[ -z "$HOST" ]]; then
@@ -37,8 +42,15 @@ if [[ -z "$HOST" ]]; then
   exit 1
 fi
 
-if [[ -z "$USER" && "$HOST" != *@* ]]; then
-  echo "Missing user in options.nix" >&2
+SSH_USER="$INSTALL_USER"
+if [[ -z "$SSH_USER" ]]; then
+  SSH_USER="$HOST_USER"
+fi
+if [[ -z "$SSH_USER" && "$HOST" == *@* ]]; then
+  SSH_USER="${HOST%%@*}"
+fi
+if [[ -z "$SSH_USER" && "$HOST" != *@* ]]; then
+  echo "Missing install user in options.nix" >&2
   exit 1
 fi
 
@@ -52,27 +64,14 @@ if [[ -z "$SERVICE" ]]; then
   exit 1
 fi
 
-FLAKE=".#$SERVICE"
-
-if [[ -z "$MODE" ]]; then
-  echo "Missing mode in options.nix" >&2
-  exit 1
-fi
-
-if [[ "$MODE" != "install" && "$MODE" != "switch" ]]; then
-  echo "Invalid mode: $MODE" >&2
-  echo "Expected 'install' or 'switch'." >&2
-  exit 1
-fi
-
-if [[ "$MODE" == "install" && "$CONFIRM_INSTALL" != "1" ]]; then
+if [[ "$CONFIRM_INSTALL" != "1" ]]; then
   echo "Install mode is destructive. Set installer.confirmInstall = true to continue." >&2
   exit 1
 fi
 
 TARGET_HOST="$HOST"
 if [[ "$HOST" != *@* ]]; then
-  TARGET_HOST="$USER@$HOST"
+  TARGET_HOST="$SSH_USER@$HOST"
 fi
 
 log() {
@@ -125,13 +124,9 @@ if [[ "$BACKUP_ENABLE" == "1" ]]; then
   REPO_ROOT_REAL="$(realpath -m "$(pwd)")"
   BACKUP_DIR_REAL="$(realpath -m "$BACKUP_DIR")"
   if [[ "$BACKUP_DIR_REAL" == "$REPO_ROOT_REAL"* && ! -d "${REPO_ROOT_REAL}/.git" ]]; then
-    if [[ "$BACKUP_ALLOW_INSIDE_NO_GIT" == "1" ]]; then
-      log "Warning: backup.localDir lives inside the repo but .git is missing. Backups will continue because backup.allowInsideRepoWithoutGit is true."
-    else
-      echo "backup.localDir is inside the repo but .git is missing." >&2
-      echo "Move backups outside the repo or initialize git to keep backups inside." >&2
-      exit 1
-    fi
+    echo "backup.localDir is inside the repo but .git is missing." >&2
+    echo "Move backups outside the repo or initialize git to keep backups inside." >&2
+    exit 1
   fi
   if [[ -z "$BACKUP_PATHS" ]]; then
     BACKUP_PATHS="/srv/$SERVICE"
@@ -180,30 +175,13 @@ rsync -az --delete --rsync-path="$RSYNC_PATH" \
   --exclude "backups" \
   ./ "$TARGET_HOST:$REMOTE_REPO_DIR/"
 
-log "Starting deployment ($MODE)..."
-if [[ "$MODE" == "switch" ]]; then
-  log "Running nixos-rebuild switch (this may take a while depending on local/remote network)..."
+log "Starting installation via nixos-anywhere..."
+FLAKE=".#$SERVICE"
 
-  SYSTEM_NAME="$FLAKE"
-  if [[ "$FLAKE" == *"#"* ]]; then
-    SYSTEM_NAME="$(printf '%s' "$FLAKE" | cut -d'#' -f2-)"
-  fi
-  if ! ssh "$TARGET_HOST" "command -v nixos-rebuild >/dev/null 2>&1"; then
-    echo "nixos-rebuild not found on target. Use mode=install for fresh installs." >&2
-    exit 1
-  fi
-  if [[ -n "$REMOTE_SUDO" ]]; then
-    ssh "$TARGET_HOST" "$REMOTE_SUDO" nixos-rebuild switch --flake "$REMOTE_REPO_DIR#$SYSTEM_NAME"
-  else
-    ssh "$TARGET_HOST" nixos-rebuild switch --flake "$REMOTE_REPO_DIR#$SYSTEM_NAME"
-  fi
-else
-  NIXOS_ANYWHERE_ARGS=(--flake "$FLAKE" --target-host "$TARGET_HOST")
-  if [[ "$BUILD_ON_REMOTE" == "1" ]]; then
-    NIXOS_ANYWHERE_ARGS+=(--build-on-remote)
-  fi
-  nix run github:nix-community/nixos-anywhere -- "${NIXOS_ANYWHERE_ARGS[@]}"
+NIXOS_ANYWHERE_ARGS=(--flake "$FLAKE" --target-host "$TARGET_HOST")
+if [[ "$BUILD_ON_REMOTE" == "1" ]]; then
+  NIXOS_ANYWHERE_ARGS+=(--build-on-remote)
 fi
-
+nix run github:nix-community/nixos-anywhere -- "${NIXOS_ANYWHERE_ARGS[@]}"
 
 log "Deployment complete."

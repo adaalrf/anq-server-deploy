@@ -3,17 +3,15 @@
   pkgs,
   lib,
   ...
-}: let
+}:
+let
   cfg = config.services.palworld;
   installDir = "/srv/palworld";
   serverDir = "${installDir}/server";
   steamAppId = "2394010";
   serverBinary = "${serverDir}/PalServer.sh";
   serverConfigPath = "${serverDir}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini";
-  serverConfigFilePath =
-    if cfg.serverConfigFile == null
-    then ""
-    else cfg.serverConfigFile;
+  serverConfigFilePath = if cfg.serverConfigFile == null then "" else cfg.serverConfigFile;
 
   updateScript = pkgs.writeShellScript "palworld-update" ''
     set -euo pipefail
@@ -51,9 +49,9 @@
 
   unit = {
     description = "Palworld dedicated server";
-    after = ["network-online.target"];
-    wants = ["network-online.target"];
-    wantedBy = ["multi-user.target"];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "simple";
       User = "palworld";
@@ -70,7 +68,7 @@
       UMask = "0027";
       CPUQuota = cpuQuota;
       MemoryMax = cfg.memoryMax;
-      Environment = ["HOME=${installDir}"];
+      Environment = [ "HOME=${installDir}" ];
     };
   };
 
@@ -101,7 +99,8 @@
       description = "Additional arguments passed to the server binary.";
     };
   };
-in {
+in
+{
   options.services.palworld = configOptions;
 
   config = lib.mkIf cfg.enable {
@@ -112,14 +111,19 @@ in {
       createHome = true;
     };
 
-    users.groups.palworld = {};
+    users.groups.palworld = { };
 
-    environment.systemPackages = [pkgs.steamcmd];
+    environment.systemPackages = [ pkgs.steamcmd ];
 
-    systemd.services.palworld =
-      unit
-      // {
-        path = [pkgs.steamcmd];
-      };
+    systemd.services.palworld = unit // {
+      path = [ pkgs.steamcmd ];
+    };
+    systemd.tmpfiles.rules = [
+      "d ${installDir} 0750 palworld palworld -"
+      "d ${serverDir} 0750 palworld palworld -"
+      "d ${serverDir}/Pal/Saved/Config/LinuxServer 0750 palworld palworld -"
+      "d ${serverDir}/Pal/Saved/Logs 0750 palworld palworld -"
+      "d ${serverDir}/Pal/Saved/SaveGames 0750 palworld palworld -"
+    ];
   };
 }

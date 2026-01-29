@@ -2,134 +2,112 @@
 
 NixOS flake for deploying and managing dedicated servers with a Nix-native installer, service modules, and SSH-based health checks.
 
-This project is for people who want the whole host treated as code: OS state, users, firewall rules, services, and backups declared in one place, with reproducible deploys and rollbacks. Docker is often simpler for a single app; NixOS shines when you want host-level consistency and a single source of truth.
-
-## What you get
-
-- One config file (`options.nix`) to drive deploy behavior, SSH, services, ports, and backups.
-- Remote installs via `nix run .#install` (powered by `nixos-anywhere`).
-- Remote updates via `deploy.mode = "switch"` (runs `nixos-rebuild switch` on the host).
-- Live health checks via `nix run .#health` (ports + optional log checks).
+- Declarative host + service configuration in one place.
 - Bundled service modules for common game servers.
-
-## Get started
-
-Prerequisites: Nix with flakes enabled on your local machine (NixOS not required).
-
-1) Copy `examples/options.example.nix` to `options.local.nix`.
-2) Copy `examples/keys.example.nix` to `keys.local.nix`.
-   The tracked `options.nix`/`keys.nix` wrappers automatically import those `.local` files (or fall back to the examples when the overrides are missing).
-3) Edit `options.local.nix` (deploy, ssh, service, ports, backups).
-4) If `deploy.mode = "install"`, set `installer.confirmInstall = true`.
-5) Run `nix run .#install` (uses [`nixos-anywhere`](https://github.com/nix-community/nixos-anywhere)).
-
-Installations can be launched from macOS or Linux with Nix; the target host needs root access (for example via a rescue environment) so `nixos-anywhere` can provision the system.
+- Live health checks over SSH with port and log validation.
 
 ## Quick start
 
 ```bash
-# After "Get started":
+# Follow "Get started" first, then:
 nix run .#install
+nix run .#switch
 nix run .#health
 ```
 
-## Modes: install vs switch
-
-Use `deploy.mode = "install"` for a fresh machine install (destructive). For existing NixOS hosts, use `deploy.mode = "switch"` to apply updates without reinstalling. Both modes run through `nix run .#install`.
-
-## Mental model
+## Architecture
 
 ```
-nix run .#install
-   |
-options.nix -> configuration.nix -> services/<name>.nix -> systemd + firewall
-   |
-nix run .#health -> tests/<name>.nix (ports + optional log checks)
+                    nix run .#install
+                           |
+options.nix --> configuration.nix --> services/<name>.nix --> systemd + firewall
+                           |
+                    nix run .#health (tests/<service>.nix)
 ```
 
-## Repository layout
+## Get started
 
-- `options.nix` — tracked entrypoint that imports `options.local.nix` (or the example when the override is missing).
-- `options.local.nix` — ignored user config (copy from `examples/options.example.nix`).
-- `keys.nix` — tracked entrypoint that imports `keys.local.nix` (or the example when the override is missing).
-- `keys.local.nix` — ignored SSH key list (copy from `examples/keys.example.nix`).
-- `configuration.nix` — shared NixOS host base.
-- `installer.nix` / `disko.nix` — remote installer + disk layout.
-- `services/<service>.nix` — service modules.
-- `tests/<service>.nix` — health checks used by `nix run .#health`.
-- `server-configs/` — local config files (examples tracked).
-- `examples/` — templates you copy into place.
+1. Copy `examples/options.example.nix` to `options.nix`.
+2. Copy `examples/keys.example.nix` to `keys.nix`.
+3. Edit `options.nix` (deploy, ssh, service, ports, backups) and add your key to `keys.nix`.
+4. When you are ready to run the destructive installer, set `installer.confirmInstall = true`.
+5. Run `nix run .#install`.
+
+- There is no `*.local.nix` wrapper workflow anymore; edit `options.nix` and `keys.nix` directly and keep them synced with this repo.
+
+- Set `deploy.hostUser` to the non-root account you want created on the target . Use `deploy.installUser = "root"` while the installer runs so it can SSH in as root and still build that user.
+
+## Daily operations
+
+- Health check: `nix run .#health` (uses `tests/<service>.nix`).
+- Non-destructive updates: after editing `options.nix`, run `nix run .#switch` to rebuild the live system.
+- Backups: set `backup.enable = true`, `backup.localDir`, and `backup.archiveKeep`.
 
 ## Included services
 
-Current modules: `enshrouded`, `palworld`, `vrising`. Service modules live in `services/`; add a new module and a matching entry in `nixosConfigurations` to extend.
+Bundled modules can be used as-is, removed, or extended:
 
-## Configuration overview
+- `enshrouded`
+- `palworld`
+- `vrising`
 
-`options.nix` is the single source of truth:
+Service modules live in `services/`. Add a new module and a matching entry in `nixosConfigurations` to extend.
 
-- `deploy` / `ssh`: host, user, mode, and SSH behavior.
-- `services.<name>`: per-service settings (ports, config paths, backup paths).
-- `serviceDefaults`: shared toggles like `wineDebug`.
-- `backup`: toggle + local destination + retention.
-- `backup.allowInsideRepoWithoutGit`: whether to permit in-repo backups when `.git` is missing (defaults to `false`).
+## Configuration (high-level)
 
-Local config files go under `server-configs/`. Only examples are tracked, and the overrides (`options.local.nix`, `keys.local.nix`) stay ignored while the lightweight wrappers (`options.nix`, `keys.nix`) remain in the repo.
-
-## Adding a new service
-
-A service is complete when it has:
-
-1) `services/<name>.nix` with the systemd unit and firewall rules.
-2) `tests/<name>.nix` with port checks (and optional log checks).
-3) A flake entry under `nixosConfigurations` so it can be deployed.
+- `options.nix` is the single source of truth.
+- `deploy` and `ssh` contain host, user, mode, and SSH behavior.
+- `deploy.hostUser` is the persistent SSH account created on the host; `deploy.installUser` (optional) is only used by the destructive installer and defaults to `deploy.hostUser`.
+- Per-service settings live under `services.<name>` (ports, config file, backup paths).
+- `serviceDefaults` contains shared service toggles like `wineDebug`.
+- `server-configs/` stores config files consumed by the service modules; this repo ships with sample Palworld, Enshrouded, and V Rising configs so each service has a usable default.
+- `options.nix` and `keys.nix` are local-only, and need to be made when setting up, see examples/ for templates.
 
 ## Tests
 
-Run VM tests with `nix flake check -L` and live health checks with `nix run .#health`. Health check ports support `udp`, `tcp`, plus `udpOptional` and `tcpOptional` for non-fatal listeners.
+- Local smoke/test suite: `nix run .#test` (runs `nix flake check -L`, including the `service-check` that boots the service defined in `options.nix` and validates its directories and config file are created).
+- VM tests: `nix flake check -L -v`.
+- Live health check: `nix run .#health`.
+- Health check ports support `udp`, `tcp`, plus `udpOptional` and `tcpOptional` for non-fatal listeners.
 
-## Dev / CI parity
+## CI
 
-Tooling is provided via `nix develop` (includes `alejandra`, `statix`, `deadnix`, `shellcheck`). Run everything locally with:
-
-```bash
-nix run .#lint
-```
-
-Or individually:
-
-```bash
-nix flake check -L
-nix develop -c alejandra --check .
-nix develop -c statix check .
-nix develop -c deadnix .
-nix develop -c shellcheck scripts/*.sh checks/*.sh
-```
-
-If you use `act`, you can run workflows locally (KVM required for VM tests):
-
-```bash
-act -j lint -P ubuntu-latest=catthehacker/ubuntu:act-latest
-act -j checks --container-options "--device /dev/kvm" -P ubuntu-latest=catthehacker/ubuntu:act-latest
-```
+- Local lint/format tools: `nix develop` (includes `alejandra`, `statix`, `shellcheck`).
+- Run local lint in one command: `nix run .#lint`.
+- Run the same checks as CI:
+  - `nix flake check -L`
+  - `nix develop -c alejandra --check .`
+  - `nix develop -c statix check .`
+  - `nix develop -c shellcheck scripts/*.sh checks/*.sh`
+- GitHub Actions workflows:
+  - `Lint`: formatting + lints + shellcheck.
+  - `CI`: full `nix flake check -L` (includes VM tests) plus lints.
+- Run GitHub Actions locally with Act:
+  - Lint only: `act -j lint -P ubuntu-latest=catthehacker/ubuntu:act-latest`
+  - Full checks (requires KVM): `act -j checks --container-options "--device /dev/kvm" -P ubuntu-latest=catthehacker/ubuntu:act-latest`
 
 ## Troubleshooting
 
 - SSH host keys change after reinstall:
   - `ssh-keygen -R <host-or-ip>`
   - Set `ssh.acceptNewHostKeys = true` in `options.nix` to auto-accept (less secure).
-- Local configs (`options.local.nix`, `keys.local.nix`, and `server-configs/`) are intentionally ignored by git while `options.nix`/`keys.nix` remain tracked wrappers.
-- If `backup.localDir` lives inside the repo but `.git` is missing, set `backup.allowInsideRepoWithoutGit = true` to allow backups inside the repo; otherwise keep `.git` to satisfy the guard.
+- `options.nix`, `keys.nix`, and the sample files inside `server-configs/` are tracked in this repo; edit them directly to customize or keep copies elsewhere if you need private overrides.
 - `steamcmd` is unfree; `configuration.nix` enables unfree packages for the host build.
 
 ## Examples
 
-Example references: `examples/flake.example.nix`, `examples/options.example.nix`, `examples/keys.example.nix`, `examples/health-check.example.nix`, and `server-configs/server-module.example.nix`.
+- `examples/flake.example.nix`
+- `examples/options.example.nix`
+- `examples/keys.example.nix`
+- `examples/health-check.example.nix`
+- `server-configs/server-module.example.nix`
 
 ## Cleanup
 
-Remove unused local build artifacts with `nix store gc`.
+- Remove unused local build artifacts:
+  - `nix store gc`
+- Remove unused remote build artifacts:
+  - `nix-collect-garbage -d`
 
-## License
-
-MIT.
+## Contributer notes
+- `CHANGELOG.md` captures what changed each session; update it before you wrap up a work cycle or tag a release.

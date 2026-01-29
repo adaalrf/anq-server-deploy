@@ -1,0 +1,14 @@
+{
+  "name": "Anq Enshrouded",
+  "password": "",
+  "maxPlayers": 16,
+  "public": true,
+  "worldSeed": 2147483647,
+  "gameSettings": {
+    "difficulty": "Normal",
+    "lootQuality": "Balanced",
+    "monsterScaling": "Standard",
+    "resourceMultiplier": 1.0
+  },
+  "mods": []
+}

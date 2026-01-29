@@ -1,4 +1,5 @@
-{pkgs}: let
+{ pkgs }:
+let
   script = pkgs.writeShellApplication {
     name = "install";
     runtimeInputs = [
@@ -11,10 +12,13 @@
     ];
     text = builtins.readFile ./scripts/installer.sh;
   };
-in {
+in
+{
   type = "app";
   program = "${script}/bin/install";
   meta = {
-    description = "Install or switch dedicated servers.";
+    description =
+      "Bootstraps the server via nixos-anywhere (destructive install)."
+      + " Warning: this erases existing data on the target machine.";
   };
 }
