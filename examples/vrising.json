@@ -1,0 +1,11 @@
+{
+  "Name": "Anq Workshop",
+  "Description": "A small private world.",
+  "Port": 9876,
+  "QueryPort": 9877,
+  "MaxConnectedUsers": 8,
+  "Password": "REPLACE-ME",
+  "ListOnSteam": false,
+  "ListOnEOS": false,
+  "Rcon": { "Enabled": false }
+}

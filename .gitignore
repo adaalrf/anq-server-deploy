@@ -1,2 +1,6 @@
-backups/
+result
+result-*
+.local/
 secrets/
+*.qcow2
+__pycache__/

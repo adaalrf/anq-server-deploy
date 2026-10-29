@@ -1,113 +1,136 @@
-# anq-server-deploy
+# ANQ Server Deploy
 
-NixOS flake for deploying and managing dedicated servers with a Nix-native installer, service modules, and SSH-based health checks.
+Small NixOS modules and operations for Palworld, Enshrouded and V Rising. Each
+game gets its own system user, writable state directory, private runtime settings
+and explicit SteamCMD update command. A clean remake of the original project;
+the archived source and its dirty working tree remain unchanged.
 
-- Declarative host + service configuration in one place.
-- Bundled service modules for common game servers.
-- Live health checks over SSH with port and log validation.
+This v1 targets an **existing x86_64 NixOS host**. It does not install/repartition
+a machine or turn the Ubuntu publishing VPS into a game server. Project checks/tools use
+NixOS 26.05 pinned in flake.lock; your host controls its own Nixpkgs input.
+Game binaries remain mutable Steam downloads, not pinned
+Nix packages.
 
-## Quick start
+## Use the module
 
-```bash
-# Follow "Get started" first, then:
-nix run .#install
-nix run .#switch
-nix run .#health
+In your existing host flake, add a local input pointing at this checkout:
+
+```nix
+inputs.anqGames.url = "path:/absolute/path/to/anq-server-deploy";
 ```
 
-## Architecture
+Add the module to that host's modules list, alongside its own hardware/config:
 
+```nix
+anqGames.nixosModules.default
+{
+  nixpkgs.config.allowUnfree = true;
+  services.anqGames.palworld = {
+    enable = true;
+    settingsFile = "/var/lib/anq-game-secrets/palworld.ini";
+    autoStart = false;
+    openFirewall = false;
+  };
+}
 ```
-                    nix run .#install
-                           |
-options.nix --> configuration.nix --> services/<name>.nix --> systemd + firewall
-                           |
-                    nix run .#health (tests/<service>.nix)
+
+Use the input name from your flake outputs arguments. The standalone
+[host fragment](examples/host.nix) shows the same setup with a relative import.
+The module does not change SSH users/keys, disks, bootloaders or your host name.
+
+Copy the appropriate fictional settings example outside the repository, edit it,
+and protect its parent directory/file as root (700/600). `settingsFile` must be an
+absolute **string** pointing to that host file. Nix paths/interpolated secret
+files can enter the world-readable Nix store; store paths are rejected here.
+The service reads settings using systemd `LoadCredential`, then installs its
+runtime copy with mode 600. Example passwords must be replaced before real use.
+
+Build/review the existing host configuration through your usual NixOS workflow,
+then apply it deliberately. First installation is explicit:
+
+```sh
+sudo game-ops update palworld
+sudo systemctl start anq-game-palworld
+sudo game-ops status palworld
 ```
 
-## Get started
+A routine restart never downloads game updates. Auto-start and firewall changes
+are off by default. Enable them after a successful install and real client check.
+Keep configured ports consistent with the private game settings and any provider
+firewall. Resource ceilings are examples, not player-capacity recommendations.
 
-1. Copy `examples/options.example.nix` to `options.nix`.
-2. Copy `examples/keys.example.nix` to `keys.nix`.
-3. Edit `options.nix` (deploy, ssh, service, ports, backups) and add your key to `keys.nix`.
-4. When you are ready to run the destructive installer, set `installer.confirmInstall = true`.
-5. Run `nix run .#install`.
+## Games and paths
 
-- There is no `*.local.nix` wrapper workflow anymore; edit `options.nix` and `keys.nix` directly and keep them synced with this repo.
+| Game | Download app ID | Launcher | Default UDP ports | Snapshot paths, relative to state |
+| --- | --- | --- | --- | --- |
+| Palworld | 2394010 | Native Linux via steam-run | 8211 | server/Pal/Saved |
+| Enshrouded | 2278520 | Wine and an automatic X display | 15637 | server/savegame, server/enshrouded_server.json |
+| V Rising | 1829350 | Wine and an automatic X display | 9876, 9877 | data |
 
-- Set `deploy.hostUser` to the non-root account you want created on the target . Use `deploy.installUser = "root"` while the installer runs so it can SSH in as root and still build that user.
+State lives in `/var/lib/anq-games/GAME`, owned by `anq-GAME` with mode 700.
+Executables are under `server/`; Steam's home/cache is under `home/`; each Wine
+service has its own prefix/display. V Rising uses `data/Settings` and `data/Saves`.
+Enshrouded's save/log paths are fixed to its local server directories so its
+configured data cannot silently escape the snapshot boundary. Extra arguments
+are literal list entries, not shell code.
 
-## Daily operations
+The SteamCMD unit is `anq-game-fetch-GAME.service`; use `game-ops update`, which
+stops the game and snapshots first. Starting the fetch unit directly bypasses
+that coordination. Default firewalls expose no ports, and RCON is not enabled by
+the module. See the [upstream references](docs/UPSTREAM.md) for settings/ports.
 
-- Health check: `nix run .#health` (uses `tests/<service>.nix`).
-- Non-destructive updates: after editing `options.nix`, run `nix run .#switch` to rebuild the live system.
-- Backups: set `backup.enable = true`, `backup.localDir`, and `backup.archiveKeep`.
+## Operations
 
-## Included services
+```sh
+sudo game-ops backup palworld
+sudo game-ops update palworld
+sudo game-ops restore-check palworld /var/backup/anq-games/ARCHIVE.tar.gz /var/tmp/palworld-drill
+```
 
-Bundled modules can be used as-is, removed, or extended:
+Backups stop an active game, require a clean stop result, archive existing saved
+state/settings, and restart only if it was previously running. An update takes
+the same snapshot before SteamCMD runs. A failed snapshot prevents the update;
+a failed update leaves the game stopped because its binaries may be partly
+changed. Successful updates preserve the previous running/stopped state.
 
-- `enshrouded`
-- `palworld`
-- `vrising`
+Snapshots and SHA-256 sidecars live under root-only `/var/backup/anq-games`.
+They include private settings. They are local, unencrypted recovery copies with
+no automatic retention/off-host transfer; configure those separately for a real
+host. Checksums detect accidental corruption, not a malicious operator.
 
-Service modules live in `services/`. Add a new module and a matching entry in `nixosConfigurations` to extend.
+Restore checks verify the checksum, reject traversal/links/special files, and
+extract into a **new** directory outside live game state. They do not restore a
+running world in place. See [operations and recovery](docs/OPERATIONS.md).
 
-## Configuration (high-level)
+`status` shows systemd state and socket evidence. It does not prove discovery,
+a healthy world, or the ability for a client to join.
 
-- `options.nix` is the single source of truth.
-- `deploy` and `ssh` contain host, user, mode, and SSH behavior.
-- `deploy.hostUser` is the persistent SSH account created on the host; `deploy.installUser` (optional) is only used by the destructive installer and defaults to `deploy.hostUser`.
-- Per-service settings live under `services.<name>` (ports, config file, backup paths).
-- `serviceDefaults` contains shared service toggles like `wineDebug`.
-- `server-configs/` stores config files consumed by the service modules; this repo ships with sample Palworld, Enshrouded, and V Rising configs so each service has a usable default.
-- `options.nix` and `keys.nix` are local-only, and need to be made when setting up, see examples/ for templates.
+## Verify locally
 
-## Tests
+```sh
+nix flake check --no-build
+nix build .#checks.x86_64-linux.module-evaluation .#checks.x86_64-linux.operations .#checks.x86_64-linux.shell-package --no-link -L
+nix build .#checks.x86_64-linux.lifecycle-vm --no-link -L
+```
 
-- Local smoke/test suite: `nix run .#test` (runs `nix flake check -L`, including the `service-check` that boots the service defined in `options.nix` and validates its directories and config file are created).
-- VM tests: `nix flake check -L -v`.
-- Live health check: `nix run .#health`.
-- Health check ports support `udp`, `tcp`, plus `udpOptional` and `tcpOptional` for non-fatal listeners.
+The operations suite uses temporary files and a fake systemctl for failure cases.
+The VM boots actual NixOS/systemd and exercises all three service launch paths,
+private settings, update/start/stop, backups, extraction and failed-update recovery.
+It substitutes fixture executables for SteamCMD, steam-run, Wine and the games.
+It can run with software emulation when KVM is absent. No real game downloads or
+client connections are performed by these checks.
 
-## CI
+The built package exposes `game-ops`; configured hosts receive it automatically.
+For formatting, use `nix fmt -- flake.nix lib/*.nix modules/*.nix tests/*.nix examples/*.nix`.
+`nix develop` also provides ShellCheck and Python for direct test iteration.
 
-- Local lint/format tools: `nix develop` (includes `alejandra`, `statix`, `shellcheck`).
-- Run local lint in one command: `nix run .#lint`.
-- Run the same checks as CI:
-  - `nix flake check -L`
-  - `nix develop -c alejandra --check .`
-  - `nix develop -c statix check .`
-  - `nix develop -c shellcheck scripts/*.sh checks/*.sh`
-- GitHub Actions workflows:
-  - `Lint`: formatting + lints + shellcheck.
-  - `CI`: full `nix flake check -L` (includes VM tests) plus lints.
-- Run GitHub Actions locally with Act:
-  - Lint only: `act -j lint -P ubuntu-latest=catthehacker/ubuntu:act-latest`
-  - Full checks (requires KVM): `act -j checks --container-options "--device /dev/kvm" -P ubuntu-latest=catthehacker/ubuntu:act-latest`
+## Scope and evidence
 
-## Troubleshooting
+See [v1 scope](docs/V1.md), [case study](docs/CASE-STUDY.md) and
+[upstream references](docs/UPSTREAM.md). The local/fixture checks validate this
+project's lifecycle mechanics. Real Steam/Wine startup, game-client joins and
+world recovery are separate deployment acceptance checks, still outstanding.
+No game availability, load capacity or cross-version save compatibility is
+claimed. No production host, publishing VPS, GitHub or domain was changed.
 
-- SSH host keys change after reinstall:
-  - `ssh-keygen -R <host-or-ip>`
-  - Set `ssh.acceptNewHostKeys = true` in `options.nix` to auto-accept (less secure).
-- `options.nix`, `keys.nix`, and the sample files inside `server-configs/` are tracked in this repo; edit them directly to customize or keep copies elsewhere if you need private overrides.
-- `steamcmd` is unfree; `configuration.nix` enables unfree packages for the host build.
-
-## Examples
-
-- `examples/flake.example.nix`
-- `examples/options.example.nix`
-- `examples/keys.example.nix`
-- `examples/health-check.example.nix`
-- `server-configs/server-module.example.nix`
-
-## Cleanup
-
-- Remove unused local build artifacts:
-  - `nix store gc`
-- Remove unused remote build artifacts:
-  - `nix-collect-garbage -d`
-
-## Contributer notes
-- `CHANGELOG.md` captures what changed each session; update it before you wrap up a work cycle or tag a release.
+See [contributing and source layout](CONTRIBUTING.md) for development commands, editing locations and verification boundaries.

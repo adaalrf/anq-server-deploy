@@ -1,0 +1,19 @@
+{
+  "name": "Anq Workshop",
+  "saveDirectory": "./savegame",
+  "logDirectory": "./logs",
+  "ip": "0.0.0.0",
+  "queryPort": 15637,
+  "slotCount": 8,
+  "userGroups": [
+    {
+      "name": "Friends",
+      "password": "REPLACE-ME",
+      "canKickBan": false,
+      "canAccessInventories": true,
+      "canEditBase": true,
+      "canExtendBase": true,
+      "reservedSlots": 0
+    }
+  ]
+}
