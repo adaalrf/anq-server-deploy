@@ -2,11 +2,10 @@
 
 Small NixOS modules and operations for Palworld, Enshrouded and V Rising. Each
 game gets its own system user, writable state directory, private runtime settings
-and explicit SteamCMD update command. A clean remake of the original project;
-the archived source and its dirty working tree remain unchanged.
+and explicit SteamCMD update command.
 
 This v1 targets an **existing x86_64 NixOS host**. It does not install/repartition
-a machine or turn the Ubuntu publishing VPS into a game server. Project checks/tools use
+a machine. Project checks/tools use
 NixOS 26.05 pinned in flake.lock; your host controls its own Nixpkgs input.
 Game binaries remain mutable Steam downloads, not pinned
 Nix packages.
@@ -126,11 +125,10 @@ For formatting, use `nix fmt -- flake.nix lib/*.nix modules/*.nix tests/*.nix ex
 
 ## Scope and evidence
 
-See [v1 scope](docs/V1.md), [case study](docs/CASE-STUDY.md) and
-[upstream references](docs/UPSTREAM.md). The local/fixture checks validate this
+See [upstream references](docs/UPSTREAM.md). The local/fixture checks validate this
 project's lifecycle mechanics. Real Steam/Wine startup, game-client joins and
 world recovery are separate deployment acceptance checks, still outstanding.
 No game availability, load capacity or cross-version save compatibility is
-claimed. No production host, publishing VPS, GitHub or domain was changed.
+claimed.
 
 See [contributing and source layout](CONTRIBUTING.md) for development commands, editing locations and verification boundaries.

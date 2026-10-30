@@ -1,8 +1,6 @@
 # Working on Anq Server Deploy
 
-Read README.md, docs/V1.md and docs/OPERATIONS.md. This is a clean NixOS module
-and local operations remake; the archived repository has a dirty working tree
-and must remain untouched. Never reset/stash it or copy its private settings.
+Read README.md and docs/OPERATIONS.md. Do not modify archived repositories or copy their private settings.
 
 Keep fixed named game services, runtime credentials outside the Nix store,
 explicit updates and per-game operation locks. Backups must finish before an

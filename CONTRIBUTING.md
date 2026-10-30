@@ -1,7 +1,7 @@
 # Developing ANQ Server Deploy
 
 This is NixOS module and operations tooling, not a web application. Read
-[README](README.md), [v1 scope](docs/V1.md), and [operations](docs/OPERATIONS.md).
+[README](README.md) and [operations](docs/OPERATIONS.md).
 You can evaluate and run fixture tests without enabling a game on your host.
 Do not run `nixos-rebuild` just to explore this repository.
 
