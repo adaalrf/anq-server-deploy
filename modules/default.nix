@@ -199,6 +199,7 @@ in
       map (name: {
         ${unitFor name} = {
           description = "Anq ${name} dedicated game service";
+          unitConfig.ConditionPathExists = "!/run/anq-games/${name}.maintenance";
           after = [ "network-online.target" ];
           wants = [ "network-online.target" ];
           wantedBy = lib.optional cfg.${name}.autoStart "multi-user.target";
@@ -226,6 +227,7 @@ in
         };
         ${fetchFor name} = {
           description = "Explicit SteamCMD install/update for ${name}";
+          unitConfig.ConditionPathExists = "/run/anq-games/${name}.fetch-ready";
           after = [ "network-online.target" ];
           wants = [ "network-online.target" ];
           environment = environmentFor name;

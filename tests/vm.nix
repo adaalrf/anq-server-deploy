@@ -2,6 +2,7 @@
 let
   fixtureGame = pkgs.writeShellScript "fixture-game" ''
     set -euo pipefail
+    if [ -e "$HOME/crash-game" ]; then exit 1; fi
     case "$ANQ_GAME" in
       palworld) save="$ANQ_ROOT/server/Pal/Saved/SaveGames/world" ;;
       enshrouded) save="$ANQ_ROOT/server/savegame/world" ;;
@@ -17,6 +18,7 @@ let
     runtimeInputs = [ pkgs.coreutils ];
     text = ''
       if [ -e "$HOME/fail-fetch" ]; then exit 1; fi
+      while [ -e "$HOME/hold-fetch" ]; do sleep 1; done
       target=
       while [ "$#" -gt 0 ]; do
         if [ "$1" = +force_install_dir ]; then target=$2; break; fi
@@ -40,7 +42,7 @@ in
 pkgs.testers.runNixOSTest {
   name = "anq-games-lifecycle";
   requiredFeatures.kvm = false;
-  nodes.machine = { lib, ... }: {
+  nodes.machine = { ... }: {
     imports = [ module ];
     virtualisation.memorySize = 768;
     virtualisation.cores = 2;
@@ -75,8 +77,7 @@ pkgs.testers.runNixOSTest {
         QueryPort = 9877;
       };
     };
-    # No accidental retry loop in an intentional failure test.
-    systemd.services.anq-game-palworld.serviceConfig.Restart = lib.mkForce "no";
+
   };
   testScript = ''
     start_all()
@@ -98,6 +99,36 @@ pkgs.testers.runNixOSTest {
     machine.fail("su -s /bin/sh nobody -c 'cat /var/lib/anq-games/palworld/server/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini'")
     machine.succeed("game-ops update palworld")
     machine.wait_for_unit("anq-game-palworld.service")
+    # Exercise an actual Restart=on-failure delay, not a mocked active state.
+    machine.succeed("touch /var/lib/anq-games/palworld/home/crash-game; systemctl restart anq-game-palworld")
+    machine.wait_until_succeeds("test $(systemctl show -p SubState --value anq-game-palworld) = auto-restart")
+    machine.succeed("rm /var/lib/anq-games/palworld/home/crash-game; touch /var/lib/anq-games/palworld/home/hold-fetch")
+    machine.succeed("systemd-run --no-block --unit=fixture-update --property=Type=oneshot /run/current-system/sw/bin/game-ops update palworld")
+    machine.wait_until_succeeds("test $(systemctl show -p ActiveState --value anq-game-fetch-palworld) = activating")
+    machine.fail("systemctl is-active --quiet anq-game-palworld")
+    machine.succeed("systemctl start anq-game-palworld")
+    machine.fail("systemctl is-active --quiet anq-game-palworld")
+    machine.succeed("test -e /run/anq-games/palworld.maintenance")
+    machine.succeed("rm /var/lib/anq-games/palworld/home/hold-fetch")
+    machine.wait_until_succeeds("test $(systemctl show -p ActiveState --value fixture-update) = inactive")
+    machine.succeed("test $(systemctl show -p Result --value fixture-update) = success")
+    machine.wait_for_unit("anq-game-palworld.service")
+    machine.succeed("test ! -e /run/anq-games/palworld.maintenance; test ! -e /run/anq-games/palworld.fetch-ready")
+    # Losing the coordinator must not open the game while its fetch still runs.
+    machine.succeed("touch /var/lib/anq-games/palworld/home/hold-fetch")
+    machine.succeed("systemd-run --no-block --unit=fixture-interrupted --property=Type=oneshot /run/current-system/sw/bin/game-ops update palworld")
+    machine.wait_until_succeeds("test $(systemctl show -p ActiveState --value anq-game-fetch-palworld) = activating")
+    machine.succeed("systemctl stop fixture-interrupted")
+    machine.succeed("test -e /run/anq-games/palworld.maintenance; systemctl start anq-game-palworld")
+    machine.fail("systemctl is-active --quiet anq-game-palworld")
+    machine.succeed("rm /var/lib/anq-games/palworld/home/hold-fetch")
+    machine.wait_until_succeeds("test $(systemctl show -p ActiveState --value anq-game-fetch-palworld) = inactive")
+    machine.succeed("rm /run/anq-games/palworld.fetch-ready /run/anq-games/palworld.maintenance; systemctl start anq-game-palworld")
+    machine.wait_for_unit("anq-game-palworld.service")
+    # Direct fetch starts are skipped outside the coordinator's fetch phase.
+    machine.succeed("touch /var/lib/anq-games/palworld/home/hold-fetch; systemctl start anq-game-fetch-palworld")
+    machine.fail("systemctl is-active --quiet anq-game-fetch-palworld")
+    machine.succeed("rm /var/lib/anq-games/palworld/home/hold-fetch")
     machine.succeed("touch /var/lib/anq-games/palworld/home/fail-fetch")
     machine.fail("game-ops update palworld")
     machine.fail("systemctl is-active --quiet anq-game-palworld.service")

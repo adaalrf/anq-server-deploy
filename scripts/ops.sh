@@ -31,12 +31,40 @@ install -d -m 0700 "$backups" "$backups/.locks"
 exec 9> "$backups/.locks/$name.lock"
 flock -n 9 || { echo "Another backup/update holds the $name lock." >&2; exit 1; }
 was_running=false
-if systemctl is-active --quiet "$unit"; then was_running=true; fi
+state=$(systemctl show --property=ActiveState --value "$unit")
+case "$state" in
+  inactive|failed) ;;
+  active|activating|deactivating|reloading|refreshing) was_running=true ;;
+  *) echo 'Cannot determine game state safely; no operation attempted.' >&2; exit 1 ;;
+esac
 configured_paths=$(jq -er '.backupPaths[]' "$manifest")
+: "${ANQ_RUNTIME_ROOT:=/run/anq-games}"
+install -d -m 0755 "$ANQ_RUNTIME_ROOT"
+maintenance="$ANQ_RUNTIME_ROOT/$name.maintenance"
+fetch_ready="$ANQ_RUNTIME_ROOT/$name.fetch-ready"
+# Conditions on the units block new starts while the coordinator quiesces state.
+# Never reuse a marker left by an interrupted operation without inspection.
+if [[ -e "$fetch_ready" || -L "$fetch_ready" ]] || ! (set -o noclobber; : > "$maintenance"); then
+  echo 'Interrupted maintenance marker exists; inspect the game and update before removing it.' >&2
+  exit 1
+fi
 restart=false
 finish() {
   local result=$?
   trap - EXIT
+  if [[ -e "$fetch_ready" ]]; then
+    local fetch_state
+    fetch_state=$(systemctl show --property=ActiveState --value "$fetch_unit") || fetch_state=unknown
+    case "$fetch_state" in
+      inactive|failed) ;;
+      *)
+        echo 'Fetch still active or uncertain; maintenance markers retained for inspection.' >&2
+        [[ "$result" != 0 ]] || result=1
+        exit "$result"
+        ;;
+    esac
+  fi
+  rm -f -- "$fetch_ready" "$maintenance"
   if [[ "$restart" == true && "$was_running" == true ]]; then
     if ! systemctl start "$unit"; then
       echo "Restart failed: inspect $unit before continuing." >&2
@@ -46,8 +74,16 @@ finish() {
   exit "$result"
 }
 trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+# Stop even inactive units: this cancels queued starts and auto-restart jobs.
+systemctl stop "$unit"
+case $(systemctl show --property=ActiveState --value "$unit") in
+  inactive|failed) ;;
+  *) echo 'Game did not stop; backup/update aborted.' >&2; exit 1 ;;
+esac
 if [[ "$was_running" == true ]]; then
-  systemctl stop "$unit"
   if [[ $(systemctl show --property=Result --value "$unit") != success ]]; then
     echo 'Service did not stop cleanly. Backup/update aborted; it was left stopped.' >&2
     exit 1
@@ -83,6 +119,7 @@ fi
 if [[ "$operation" == update ]]; then
   # SteamCMD may modify binaries in place. Failed updates stay stopped.
   restart=false
+  (set -o noclobber; : > "$fetch_ready")
   if ! systemctl start "$fetch_unit"; then
     echo 'Update failed. The game remains stopped; repair/retry before starting it.' >&2
     exit 1

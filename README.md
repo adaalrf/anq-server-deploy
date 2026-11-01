@@ -1,5 +1,7 @@
 # ANQ Server Deploy
 
+[![Checks](https://github.com/adaalrf/anq-server-deploy/actions/workflows/check.yml/badge.svg)](https://github.com/adaalrf/anq-server-deploy/actions/workflows/check.yml)
+
 Small NixOS modules and operations for Palworld, Enshrouded and V Rising. Each
 game gets its own system user, writable state directory, private runtime settings
 and explicit SteamCMD update command.
@@ -74,8 +76,8 @@ configured data cannot silently escape the snapshot boundary. Extra arguments
 are literal list entries, not shell code.
 
 The SteamCMD unit is `anq-game-fetch-GAME.service`; use `game-ops update`, which
-stops the game and snapshots first. Starting the fetch unit directly bypasses
-that coordination. Default firewalls expose no ports, and RCON is not enabled by
+stops the game and snapshots first. Direct fetch-unit starts are skipped outside the coordinator’s fetch phase.
+During maintenance, new game starts are skipped too, including auto-restarts. Default firewalls expose no ports, and RCON is not enabled by
 the module. See the [upstream references](docs/UPSTREAM.md) for settings/ports.
 
 ## Operations
@@ -86,7 +88,7 @@ sudo game-ops update palworld
 sudo game-ops restore-check palworld /var/backup/anq-games/ARCHIVE.tar.gz /var/tmp/palworld-drill
 ```
 
-Backups stop an active game, require a clean stop result, archive existing saved
+Backups cancel queued starts and auto-restarts, require a clean stop result, archive existing saved
 state/settings, and restart only if it was previously running. An update takes
 the same snapshot before SteamCMD runs. A failed snapshot prevents the update;
 a failed update leaves the game stopped because its binaries may be partly

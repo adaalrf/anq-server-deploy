@@ -19,7 +19,8 @@ Stopping does not delete its saved world or uninstall the game. Routine starts
 do not download updates. This is an explicit administrative procedure, not a
 global exclusion lock; direct systemctl commands can still run multiple games.
 If exclusive switching is later exposed in a UI, it needs its own guarded host
-operation. The web-app publishing dashboard does not currently provide that.
+operation. ANQ Publish provides separate guarded game controls through its game agent;
+installing this module alone does not install those controls.
 
 ## Planned change
 
@@ -76,3 +77,13 @@ Snapshots contain passwords/settings; use protected destinations when moving or
 extracting them. v1 has no encryption, pruning or remote backup delivery. Archive
 and sidecar are written separately; a missing sidecar makes the snapshot unusable
 by restore-check. Investigate it rather than treating it as a verified backup.
+
+## Interrupted maintenance
+
+The coordinator creates `/run/anq-games/GAME.maintenance` before stopping the
+unit. New starts are skipped until the operation finishes; the fetch unit also
+requires its `GAME.fetch-ready` marker, written only after snapshot validation.
+Normal exits remove both markers. If the coordinator is killed abruptly, inspect
+the service, fetch job, saved state and binaries before removing leftover markers
+and deliberately retrying. Do not remove a marker while an operation is running.
+A reboot clears these runtime markers; it does not repair an incomplete update.

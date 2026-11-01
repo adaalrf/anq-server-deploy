@@ -39,14 +39,23 @@ from pathlib import Path
 p=Path(os.environ['CONTROL']);s=json.loads(p.read_text());a=sys.argv[1:];s['calls'].append(a)
 code=0
 if a[0]=='is-active':code=0 if s['running'] else 3
-elif a[0]=='show':print(s['stop_result'])
-elif a[0]=='stop':s['running']=False
+elif a[0]=='show':
+ if '--property=ActiveState' in a:print(s.get('active_state','active' if s['running'] else 'inactive'))
+ else:print(s['stop_result'])
+elif a[0]=='stop':
+ s['running']=False;s['active_state']='inactive'
 elif a[0]=='start':
- if 'fetch' in a[-1]:code=1 if s['fail_fetch'] else 0
- else:s['running']=True
+ if 'fetch' in a[-1]:
+  assert not s['running'], 'fetch overlaps a running game'
+  assert (Path(os.environ['ANQ_RUNTIME_ROOT'])/'palworld.maintenance').exists()
+  assert (Path(os.environ['ANQ_RUNTIME_ROOT'])/'palworld.fetch-ready').exists()
+  code=1 if s['fail_fetch'] else 0
+ else:
+  assert not (Path(os.environ['ANQ_RUNTIME_ROOT'])/'palworld.maintenance').exists()
+  s['running']=True;s['active_state']='active'
 p.write_text(json.dumps(s));sys.exit(code)
 ''')
-        self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], CONTROL=str(self.control), ANQ_CONFIG_ROOT=str(self.config), ANQ_RESTORE_HELPER=str(SOURCE / "scripts/restore-check.py"))
+        self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], CONTROL=str(self.control), ANQ_RUNTIME_ROOT=str(self.root / "runtime"), ANQ_CONFIG_ROOT=str(self.config), ANQ_RESTORE_HELPER=str(SOURCE / "scripts/restore-check.py"))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -84,6 +93,32 @@ p.write_text(json.dumps(s));sys.exit(code)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.control_state()["running"])
         self.assertTrue(self.archive().exists())
+
+    def test_auto_restarting_game_is_stopped_before_update(self):
+        self.control_state(running=False, active_state="activating")
+        result = self.run_ops("update", "palworld")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.control_state()
+        self.assertTrue(state["running"])
+        stop = next(i for i, call in enumerate(state["calls"]) if call[0] == "stop")
+        fetch = next(i for i, call in enumerate(state["calls"]) if call[0] == "start" and "fetch" in call[-1])
+        self.assertLess(stop, fetch)
+
+    def test_unknown_game_state_fails_without_stop_or_fetch(self):
+        self.control_state(active_state="unknown")
+        result = self.run_ops("update", "palworld")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(call[0] in ("start", "stop") for call in self.control_state()["calls"]))
+
+    def test_interrupted_maintenance_is_not_silently_reused(self):
+        runtime = self.root / "runtime"
+        runtime.mkdir()
+        marker = runtime / "palworld.maintenance"
+        marker.write_text("previous operation")
+        result = self.run_ops("update", "palworld")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(marker.read_text(), "previous operation")
+        self.assertFalse(any(call[0] in ("start", "stop") for call in self.control_state()["calls"]))
 
     def test_failed_update_stays_stopped_and_preserves_snapshot(self):
         self.control_state(fail_fetch=True)

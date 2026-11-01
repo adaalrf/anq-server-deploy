@@ -1,0 +1,22 @@
+name: Checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b
+      - name: Formatting
+        run: nix fmt -- --check flake.nix lib/*.nix modules/*.nix tests/*.nix examples/*.nix
+      - name: Evaluate modules and check operations
+        run: nix build .#checks.x86_64-linux.module-evaluation .#checks.x86_64-linux.operations .#checks.x86_64-linux.shell-package --no-link -L
+      - name: Fixture NixOS lifecycle
+        run: nix build .#checks.x86_64-linux.lifecycle-vm --no-link -L
